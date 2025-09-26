@@ -13,12 +13,22 @@ import pickle
 import csv
 from typing import List, Dict
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
     title="Flight Delay Prediction API",
     description="API for predicting flight delays and retrieving airport information",
     version="1.0.0"
+)
+
+# Add CORS middleware to handle cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Response models
