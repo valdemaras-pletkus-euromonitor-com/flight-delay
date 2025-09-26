@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Delay Predictor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            background: white;
+        }
+        select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #4CAF50;
+        }
+        .result h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        .result p {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        .delay-probability {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .confidence {
+            color: #27ae60;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left-color: #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✈️ Flight Delay Predictor</h1>
+        <p>Select a day of the week and an airport to see the probability that your flight will be delayed by more than 15 minutes.</p>
+        
+        <form id="predictionForm">
+            <div class="form-group">
+                <label for="dayOfWeek">Day of the Week:</label>
+                <select id="dayOfWeek" name="dayOfWeek" required>
+                    <option value="">Select a day...</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                    <option value="7">Sunday</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="airport">Airport:</label>
+                <select id="airport" name="airport" required>
+                    <option value="">Loading airports...</option>
+                </select>
+            </div>
+            
+            <button type="submit" id="predictButton">Predict Delay Probability</button>
+        </form>
+        
+        <div id="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        // API base URL - adjust if needed
+        const API_BASE_URL = 'http://localhost:8000';
+        
+        // DOM elements
+        const form = document.getElementById('predictionForm');
+        const airportSelect = document.getElementById('airport');
+        const resultDiv = document.getElementById('result');
+        const predictButton = document.getElementById('predictButton');
+        
+        // Load airports when page loads
+        document.addEventListener('DOMContentLoaded', loadAirports);
+        
+        // Handle form submission
+        form.addEventListener('submit', handlePrediction);
+        
+        async function loadAirports() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/airports`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const airports = await response.json();
+                
+                // Clear the loading option
+                airportSelect.innerHTML = '<option value="">Select an airport...</option>';
+                
+                // Add airports to select
+                airports.forEach(airport => {
+                    const option = document.createElement('option');
+                    option.value = airport.id;
+                    option.textContent = airport.name;
+                    airportSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading airports:', error);
+                airportSelect.innerHTML = '<option value="">Error loading airports</option>';
+                showError('Failed to load airports. Please make sure the API server is running.');
+            }
+        }
+        
+        async function handlePrediction(event) {
+            event.preventDefault();
+            
+            const dayOfWeek = document.getElementById('dayOfWeek').value;
+            const airportId = document.getElementById('airport').value;
+            
+            if (!dayOfWeek || !airportId) {
+                showError('Please select both a day of the week and an airport.');
+                return;
+            }
+            
+            // Show loading state
+            predictButton.disabled = true;
+            predictButton.textContent = 'Predicting...';
+            resultDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/predict?day_of_week=${dayOfWeek}&airport_id=${airportId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const prediction = await response.json();
+                
+                showResult(prediction, dayOfWeek, airportId);
+                
+            } catch (error) {
+                console.error('Error getting prediction:', error);
+                showError('Failed to get prediction. Please make sure the API server is running.');
+            } finally {
+                // Reset button state
+                predictButton.disabled = false;
+                predictButton.textContent = 'Predict Delay Probability';
+            }
+        }
+        
+        function showResult(prediction, dayOfWeek, airportId) {
+            const delayPercentage = Math.round(prediction.delay_probability * 100);
+            const confidencePercentage = Math.round(prediction.confidence * 100);
+            
+            const dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const selectedDay = dayNames[parseInt(dayOfWeek)];
+            
+            const selectedAirportName = airportSelect.options[airportSelect.selectedIndex].text;
+            
+            resultDiv.innerHTML = `
+                <h2>Prediction Results</h2>
+                <p><strong>Flight Details:</strong> ${selectedDay} to ${selectedAirportName}</p>
+                <p class="delay-probability">Delay Probability: ${delayPercentage}%</p>
+                <p class="confidence">Model Confidence: ${confidencePercentage}%</p>
+                <p><small>This prediction is based on historical FAA flight data from 2013 and indicates the probability of arrival delays greater than 15 minutes.</small></p>
+            `;
+            
+            resultDiv.className = 'result';
+            resultDiv.style.display = 'block';
+        }
+        
+        function showError(message) {
+            resultDiv.innerHTML = `
+                <h2>Error</h2>
+                <p>${message}</p>
+            `;
+            resultDiv.className = 'result error';
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
